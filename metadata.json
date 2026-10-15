@@ -1,0 +1,6 @@
+{
+  "name": "Wildfire Impact Tracker",
+  "description": "Interactive wildfire monitoring dashboard mapping active fire detections, severity indicators, and geographic impact across the continental US.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
