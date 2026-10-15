@@ -7,7 +7,19 @@ export function loadSavedPlacesFromStorage(): SavedPlace[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (p) =>
+        p &&
+        typeof p.id === 'string' &&
+        typeof p.name === 'string' &&
+        typeof p.lat === 'number' &&
+        typeof p.lng === 'number' &&
+        !isNaN(p.lat) &&
+        !isNaN(p.lng) &&
+        isFinite(p.lat) &&
+        isFinite(p.lng)
+    );
   } catch (e) {
     console.warn('Failed to load saved places from localStorage:', e);
     return [];
@@ -16,6 +28,18 @@ export function loadSavedPlacesFromStorage(): SavedPlace[] {
 
 export function savePlaceToStorage(place: { name: string; lat: number; lng: number }): SavedPlace[] {
   try {
+    if (
+      !place ||
+      typeof place.lat !== 'number' ||
+      typeof place.lng !== 'number' ||
+      isNaN(place.lat) ||
+      isNaN(place.lng) ||
+      !isFinite(place.lat) ||
+      !isFinite(place.lng)
+    ) {
+      return loadSavedPlacesFromStorage();
+    }
+
     const current = loadSavedPlacesFromStorage();
     const existingIndex = current.findIndex(
       (p) => Math.abs(p.lat - place.lat) < 0.001 && Math.abs(p.lng - place.lng) < 0.001

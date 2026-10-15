@@ -100,8 +100,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const res = await fetch(`/api/geocode?q=${encodeURIComponent(query.trim())}`);
       if (res.ok) {
         const data = await res.json();
-        setSearchResults(data);
-        return;
+        if (Array.isArray(data)) {
+          const valid = data.filter(
+            (item: any) =>
+              item &&
+              typeof item.lat === 'number' &&
+              typeof item.lng === 'number' &&
+              !isNaN(item.lat) &&
+              !isNaN(item.lng) &&
+              isFinite(item.lat) &&
+              isFinite(item.lng)
+          );
+          setSearchResults(valid);
+          return;
+        }
       }
 
       // 2. Client fallback directly to OSM Nominatim
@@ -113,15 +125,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
       );
       if (directRes.ok) {
         const directData = await directRes.json();
-        const mapped = directData.map((item: any) => ({
-          id: String(item.place_id),
-          name: item.name || item.display_name.split(',')[0],
-          displayName: item.display_name,
-          state: item.display_name.split(',')[1]?.trim() || '',
-          lat: parseFloat(item.lat),
-          lng: parseFloat(item.lon),
-        }));
-        setSearchResults(mapped);
+        if (Array.isArray(directData)) {
+          const mapped = directData
+            .map((item: any) => ({
+              id: String(item.place_id),
+              name: item.name || item.display_name.split(',')[0],
+              displayName: item.display_name,
+              state: item.display_name.split(',')[1]?.trim() || '',
+              lat: parseFloat(item.lat),
+              lng: parseFloat(item.lon),
+            }))
+            .filter(
+              (item) =>
+                !isNaN(item.lat) &&
+                !isNaN(item.lng) &&
+                isFinite(item.lat) &&
+                isFinite(item.lng)
+            );
+          setSearchResults(mapped);
+        }
       } else {
         setSearchError('Location not found');
       }
@@ -152,6 +174,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handleSelectResult = (result: PlaceSearchResult) => {
+    if (
+      !result ||
+      typeof result.lat !== 'number' ||
+      typeof result.lng !== 'number' ||
+      isNaN(result.lat) ||
+      isNaN(result.lng) ||
+      !isFinite(result.lat) ||
+      !isFinite(result.lng)
+    ) {
+      return;
+    }
+
     const newPlace: SelectedPlace = {
       id: result.id,
       name: result.name,
@@ -170,6 +204,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handleSelectSavedPlace = (place: SavedPlace) => {
+    if (
+      !place ||
+      typeof place.lat !== 'number' ||
+      typeof place.lng !== 'number' ||
+      isNaN(place.lat) ||
+      isNaN(place.lng) ||
+      !isFinite(place.lat) ||
+      !isFinite(place.lng)
+    ) {
+      return;
+    }
+
     const newPlace: SelectedPlace = {
       id: place.id,
       name: place.name,

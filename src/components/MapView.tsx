@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { MapContainer, TileLayer, CircleMarker, Marker, Popup, Circle, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import { Flame, Compass, ExternalLink, MapPin, Sun, Moon } from 'lucide-react';
@@ -41,13 +41,51 @@ interface MapControllerProps {
 
 const MapController: React.FC<MapControllerProps> = ({ center, zoom }) => {
   const map = useMap();
+  const lastTargetRef = useRef<{ lat: number; lng: number; zoom: number } | null>(null);
 
   useEffect(() => {
-    map.flyTo(center, zoom, {
-      duration: 1.2,
-      easeLinearity: 0.25,
-    });
-  }, [center, zoom, map]);
+    const lat = center?.[0];
+    const lng = center?.[1];
+
+    if (
+      typeof lat !== 'number' ||
+      typeof lng !== 'number' ||
+      isNaN(lat) ||
+      isNaN(lng) ||
+      !isFinite(lat) ||
+      !isFinite(lng) ||
+      typeof zoom !== 'number' ||
+      isNaN(zoom) ||
+      !isFinite(zoom)
+    ) {
+      return;
+    }
+
+    const last = lastTargetRef.current;
+    if (
+      last &&
+      Math.abs(last.lat - lat) < 0.0001 &&
+      Math.abs(last.lng - lng) < 0.0001 &&
+      Math.abs(last.zoom - zoom) < 0.1
+    ) {
+      return;
+    }
+
+    lastTargetRef.current = { lat, lng, zoom };
+
+    try {
+      map.flyTo([lat, lng], zoom, {
+        duration: 1.2,
+        easeLinearity: 0.25,
+      });
+    } catch {
+      try {
+        map.setView([lat, lng], zoom);
+      } catch {
+        // Safe fallback
+      }
+    }
+  }, [center?.[0], center?.[1], zoom, map]);
 
   return null;
 };
@@ -76,26 +114,71 @@ export const MapView: React.FC<MapViewProps> = ({
   const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795];
   const DEFAULT_ZOOM = 4.5;
 
-  const currentCenter: [number, number] = flyToLocation
-    ? [flyToLocation.lat, flyToLocation.lng]
-    : selectedPlace
-    ? [selectedPlace.lat, selectedPlace.lng]
-    : selectedDetection
-    ? [selectedDetection.latitude, selectedDetection.longitude]
+  const validFlyTo =
+    flyToLocation &&
+    typeof flyToLocation.lat === 'number' &&
+    typeof flyToLocation.lng === 'number' &&
+    !isNaN(flyToLocation.lat) &&
+    !isNaN(flyToLocation.lng) &&
+    isFinite(flyToLocation.lat) &&
+    isFinite(flyToLocation.lng)
+      ? flyToLocation
+      : null;
+
+  const validPlace =
+    selectedPlace &&
+    typeof selectedPlace.lat === 'number' &&
+    typeof selectedPlace.lng === 'number' &&
+    !isNaN(selectedPlace.lat) &&
+    !isNaN(selectedPlace.lng) &&
+    isFinite(selectedPlace.lat) &&
+    isFinite(selectedPlace.lng)
+      ? selectedPlace
+      : null;
+
+  const validDetection =
+    selectedDetection &&
+    typeof selectedDetection.latitude === 'number' &&
+    typeof selectedDetection.longitude === 'number' &&
+    !isNaN(selectedDetection.latitude) &&
+    !isNaN(selectedDetection.longitude) &&
+    isFinite(selectedDetection.latitude) &&
+    isFinite(selectedDetection.longitude)
+      ? selectedDetection
+      : null;
+
+  const currentCenter: [number, number] = validFlyTo
+    ? [validFlyTo.lat, validFlyTo.lng]
+    : validPlace
+    ? [validPlace.lat, validPlace.lng]
+    : validDetection
+    ? [validDetection.latitude, validDetection.longitude]
     : DEFAULT_CENTER;
 
-  const currentZoom = flyToLocation?.zoom || (selectedPlace ? 8 : selectedDetection ? 7.5 : DEFAULT_ZOOM);
+  const currentZoom =
+    validFlyTo?.zoom ??
+    (validPlace ? 8 : validDetection ? 7.5 : DEFAULT_ZOOM);
 
   const bluePinIcon = useMemo(() => createBluePinIcon(), []);
   const [mapTheme, setMapTheme] = useState<'dark' | 'standard'>('dark');
 
-  // Filter or highlight detections based on selectedPlace & range (150 miles)
+  // Filter or highlight detections based on selectedPlace & range (150 miles), ensuring only finite coordinates
   const visibleDetections = useMemo(() => {
-    if (!selectedPlace || !filterWithinRangeOnly) {
-      return detections;
+    const valid = detections.filter(
+      (d) =>
+        d &&
+        typeof d.latitude === 'number' &&
+        typeof d.longitude === 'number' &&
+        !isNaN(d.latitude) &&
+        !isNaN(d.longitude) &&
+        isFinite(d.latitude) &&
+        isFinite(d.longitude)
+    );
+    if (!validPlace || !filterWithinRangeOnly) {
+      return valid;
     }
-    return detections.filter((d) => d.isWithinRange);
-  }, [detections, selectedPlace, filterWithinRangeOnly]);
+    return valid.filter((d) => d.isWithinRange);
+  }, [detections, validPlace, filterWithinRangeOnly]);
 
   return (
     <div className="relative w-full h-full bg-slate-950">
@@ -121,9 +204,9 @@ export const MapView: React.FC<MapViewProps> = ({
         />
 
         {/* 150-Mile Radius Zone Circle around selected place */}
-        {selectedPlace && (
+        {validPlace && (
           <Circle
-            center={[selectedPlace.lat, selectedPlace.lng]}
+            center={[validPlace.lat, validPlace.lng]}
             radius={150 * 1609.344} // 150 miles in meters
             pathOptions={{
               color: '#3b82f6',
@@ -136,9 +219,9 @@ export const MapView: React.FC<MapViewProps> = ({
         )}
 
         {/* Blue Pin for Selected Place */}
-        {selectedPlace && (
+        {validPlace && (
           <Marker
-            position={[selectedPlace.lat, selectedPlace.lng]}
+            position={[validPlace.lat, validPlace.lng]}
             icon={bluePinIcon}
           >
             <Popup className="dark-popup">
@@ -148,14 +231,14 @@ export const MapView: React.FC<MapViewProps> = ({
                   <span>Selected Location</span>
                 </div>
                 <h4 className="font-bold text-sm text-white mb-0.5">
-                  {selectedPlace.name}
+                  {validPlace.name}
                 </h4>
                 <p className="text-[11px] text-zinc-400 mb-2 truncate max-w-[220px]">
-                  {selectedPlace.displayName}
+                  {validPlace.displayName}
                 </p>
                 <div className="pt-2 border-t border-zinc-800 text-[10px] text-zinc-400 flex justify-between font-mono">
                   <span>150-Mile Radius Active</span>
-                  <span>{selectedPlace.lat.toFixed(3)}°, {selectedPlace.lng.toFixed(3)}°</span>
+                  <span>{validPlace.lat.toFixed(3)}°, {validPlace.lng.toFixed(3)}°</span>
                 </div>
               </div>
             </Popup>

@@ -47,22 +47,26 @@ export async function geocodeHandler(req: Request, res: Response): Promise<void>
 
     const data = (await response.json()) as NominatimResult[];
 
-    const results = data.map((item) => {
-      // Craft a short, clean name and secondary label
-      const nameParts = item.display_name.split(',');
-      const shortName = item.name || nameParts[0]?.trim() || trimmed;
-      const state = item.address?.state || nameParts[1]?.trim() || '';
+    const results = data
+      .map((item) => {
+        // Craft a short, clean name and secondary label
+        const nameParts = item.display_name.split(',');
+        const shortName = item.name || nameParts[0]?.trim() || trimmed;
+        const state = item.address?.state || nameParts[1]?.trim() || '';
+        const lat = parseFloat(item.lat);
+        const lng = parseFloat(item.lon);
 
-      return {
-        id: String(item.place_id),
-        name: shortName,
-        displayName: item.display_name,
-        state: state,
-        lat: parseFloat(item.lat),
-        lng: parseFloat(item.lon),
-        type: item.type || 'place',
-      };
-    });
+        return {
+          id: String(item.place_id),
+          name: shortName,
+          displayName: item.display_name,
+          state: state,
+          lat,
+          lng,
+          type: item.type || 'place',
+        };
+      })
+      .filter((r) => !isNaN(r.lat) && !isNaN(r.lng) && isFinite(r.lat) && isFinite(r.lng));
 
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'public, max-age=1800'); // Cache for 30 minutes

@@ -14,6 +14,23 @@ export function calculateDistanceMiles(
   lat2: number,
   lon2: number
 ): number {
+  if (
+    typeof lat1 !== 'number' ||
+    typeof lon1 !== 'number' ||
+    typeof lat2 !== 'number' ||
+    typeof lon2 !== 'number' ||
+    isNaN(lat1) ||
+    isNaN(lon1) ||
+    isNaN(lat2) ||
+    isNaN(lon2) ||
+    !isFinite(lat1) ||
+    !isFinite(lon1) ||
+    !isFinite(lat2) ||
+    !isFinite(lon2)
+  ) {
+    return 999999;
+  }
+
   const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
 
   const R = 3958.8; // Earth's mean radius in miles
@@ -36,6 +53,9 @@ export function calculateDistanceMiles(
  * Formats a distance in miles into a human-readable string.
  */
 export function formatDistanceMiles(miles: number): string {
+  if (typeof miles !== 'number' || isNaN(miles) || !isFinite(miles)) {
+    return 'Distance unavailable';
+  }
   if (miles < 1) {
     return `${(miles * 5280).toFixed(0)} ft away`;
   }
@@ -50,7 +70,18 @@ export function formatDistanceMiles(miles: number): string {
  * Example: 45.82215, -73.26798 -> "45.82°N, 73.27°W"
  */
 export function formatCoordinatesLabel(lat: number, lon: number): string {
+  if (
+    typeof lat !== 'number' ||
+    typeof lon !== 'number' ||
+    isNaN(lat) ||
+    isNaN(lon) ||
+    !isFinite(lat) ||
+    !isFinite(lon)
+  ) {
+    return 'Thermal Hotspot';
+  }
   const latStr = `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? 'N' : 'S'}`;
   const lonStr = `${Math.abs(lon).toFixed(2)}°${lon >= 0 ? 'E' : 'W'}`;
   return `${latStr}, ${lonStr}`;
 }
+

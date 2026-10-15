@@ -86,17 +86,32 @@ export default function App() {
       const rawData = await response.json();
 
       if (Array.isArray(rawData) && rawData.length > 0) {
-        const mappedDetections: FireDetection[] = rawData.map((item: any, idx: number) => ({
-          id: `firms-${item.latitude.toFixed(4)}-${item.longitude.toFixed(4)}-${item.acq_time}-${idx}`,
-          latitude: Number(item.latitude),
-          longitude: Number(item.longitude),
-          brightness: Number(item.brightness) || 0,
-          confidence: String(item.confidence || 'Nominal'),
-          frp: Number(item.frp) || 0,
-          acq_date: String(item.acq_date || ''),
-          acq_time: String(item.acq_time || ''),
-          name: formatCoordinatesLabel(Number(item.latitude), Number(item.longitude)),
-        }));
+        const validItems = rawData.filter(
+          (item: any) =>
+            item &&
+            typeof item.latitude !== 'undefined' &&
+            typeof item.longitude !== 'undefined' &&
+            !isNaN(Number(item.latitude)) &&
+            !isNaN(Number(item.longitude)) &&
+            isFinite(Number(item.latitude)) &&
+            isFinite(Number(item.longitude))
+        );
+
+        const mappedDetections: FireDetection[] = validItems.map((item: any, idx: number) => {
+          const lat = Number(item.latitude);
+          const lng = Number(item.longitude);
+          return {
+            id: `firms-${lat.toFixed(4)}-${lng.toFixed(4)}-${item.acq_time}-${idx}`,
+            latitude: lat,
+            longitude: lng,
+            brightness: Number(item.brightness) || 0,
+            confidence: String(item.confidence || 'Nominal'),
+            frp: Number(item.frp) || 0,
+            acq_date: String(item.acq_date || ''),
+            acq_time: String(item.acq_time || ''),
+            name: formatCoordinatesLabel(lat, lng),
+          };
+        });
 
         setRawDetections(mappedDetections);
         setIsRealDataLoaded(isLive);
@@ -272,6 +287,18 @@ export default function App() {
   };
 
   const handleInspectAlert = (alert: ProximityAlert) => {
+    if (
+      !alert ||
+      typeof alert.placeLat !== 'number' ||
+      typeof alert.placeLng !== 'number' ||
+      isNaN(alert.placeLat) ||
+      isNaN(alert.placeLng) ||
+      !isFinite(alert.placeLat) ||
+      !isFinite(alert.placeLng)
+    ) {
+      return;
+    }
+
     // Select the saved place
     const targetPlace: SelectedPlace = {
       id: alert.placeId,
@@ -282,8 +309,19 @@ export default function App() {
     };
     setSelectedPlace(targetPlace);
 
-    // Fly to fire hotspot location
-    setFlyToLocation({ lat: alert.fireLat, lng: alert.fireLng, zoom: 9 });
+    // Fly to fire hotspot location if valid, otherwise place
+    if (
+      typeof alert.fireLat === 'number' &&
+      typeof alert.fireLng === 'number' &&
+      !isNaN(alert.fireLat) &&
+      !isNaN(alert.fireLng) &&
+      isFinite(alert.fireLat) &&
+      isFinite(alert.fireLng)
+    ) {
+      setFlyToLocation({ lat: alert.fireLat, lng: alert.fireLng, zoom: 9 });
+    } else {
+      setFlyToLocation({ lat: alert.placeLat, lng: alert.placeLng, zoom: 8 });
+    }
 
     // Select the detection if present in raw detections
     const matchedFire = rawDetections.find((d) => d.id === alert.fireId);
@@ -298,7 +336,15 @@ export default function App() {
   // Handle selecting a place
   const handleSelectPlace = (place: SelectedPlace | null) => {
     setSelectedPlace(place);
-    if (place) {
+    if (
+      place &&
+      typeof place.lat === 'number' &&
+      typeof place.lng === 'number' &&
+      !isNaN(place.lat) &&
+      !isNaN(place.lng) &&
+      isFinite(place.lat) &&
+      isFinite(place.lng)
+    ) {
       setFlyToLocation({ lat: place.lat, lng: place.lng, zoom: 8 });
     }
   };
