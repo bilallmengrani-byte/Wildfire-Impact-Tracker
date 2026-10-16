@@ -119,10 +119,33 @@ function parseFirmsCsv(csvText: string): CleanedFireDetection[] {
   return detections;
 }
 
+function safeSetHeader(res: any, name: string, value: string) {
+  if (!res.headersSent && typeof res.setHeader === 'function') {
+    res.setHeader(name, value);
+  }
+}
+
+function safeSendJson(res: any, status: number, data: any) {
+  if (res.headersSent) return;
+  safeSetHeader(res, 'Content-Type', 'application/json');
+  safeSetHeader(res, 'Access-Control-Allow-Origin', '*');
+  if (typeof res.status === 'function') {
+    res.status(status);
+    if (typeof res.json === 'function') {
+      res.json(data);
+      return;
+    }
+  } else {
+    res.statusCode = status;
+  }
+  res.end(JSON.stringify(data));
+}
+
 async function fetchFirmsSource(source: string, mapKey: string, areaCoords: string): Promise<CleanedFireDetection[]> {
   const firmsUrl = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${mapKey}/${source}/${areaCoords}/1`;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  // 4-second timeout to prevent serverless function invocation timeout (Vercel max 10s)
+  const timeout = setTimeout(() => controller.abort(), 4000);
 
   try {
     const res = await fetch(firmsUrl, {
@@ -153,74 +176,86 @@ async function fetchFirmsSource(source: string, mapKey: string, areaCoords: stri
  * Fetches last 24 hours of VIIRS satellite fire detections for Continental US from NASA FIRMS.
  * Queries active VIIRS satellites (NOAA-20, NOAA-21, Suomi-NPP) to ensure continuous live coverage.
  */
-export async function getFiresHandler(_req: Request, res: Response): Promise<void> {
-  const envKey = process.env.FIRMS_MAP_KEY?.trim();
-  const mapKey = (envKey && envKey !== 'MY_NASA_FIRMS_MAP_KEY')
-    ? envKey
-    : 'de8075a4eb10991384722aa38a5c06ec';
-
-  // Check cache first (only serve if cache has data)
-  const now = Date.now();
-  if (memoryCache && memoryCache.data.length > 0 && now - memoryCache.timestamp < CACHE_TTL_MS) {
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Cache-Control', 'public, max-age=300');
-    res.setHeader('X-FIRMS-Live', 'true');
-    res.setHeader('X-FIRMS-Cached', 'true');
-    res.status(200).json(memoryCache.data);
-    return;
-  }
-
-  // Continental US Bounding Box: [West, South, East, North]
-  const areaCoords = '-125,24,-66,49';
-
-  // Try NOAA-20 first (primary active polar pass)
-  let liveDetections = await fetchFirmsSource('VIIRS_NOAA20_NRT', mapKey, areaCoords);
-
-  // If NOAA-20 returned few or no detections, try NOAA-21
-  if (liveDetections.length < 20) {
-    const noaa21 = await fetchFirmsSource('VIIRS_NOAA21_NRT', mapKey, areaCoords);
-    if (noaa21.length > 0) {
-      liveDetections = [...liveDetections, ...noaa21];
+export async function getFiresHandler(req: Request | any, res: Response | any): Promise<void> {
+  // Handle CORS preflight
+  if (req?.method === 'OPTIONS') {
+    safeSetHeader(res, 'Access-Control-Allow-Origin', '*');
+    safeSetHeader(res, 'Access-Control-Allow-Methods', 'GET, OPTIONS');
+    safeSetHeader(res, 'Access-Control-Allow-Headers', 'Content-Type');
+    if (typeof res.status === 'function') {
+      res.status(204).end();
+    } else {
+      res.statusCode = 204;
+      res.end();
     }
-  }
-
-  // If still empty, try SNPP
-  if (liveDetections.length === 0) {
-    liveDetections = await fetchFirmsSource('VIIRS_SNPP_NRT', mapKey, areaCoords);
-  }
-
-  if (liveDetections.length > 0) {
-    // Deduplicate by close coordinates (within 0.005 deg)
-    const seen = new Set<string>();
-    const deduplicated = liveDetections.filter((d) => {
-      const key = `${d.latitude.toFixed(3)},${d.longitude.toFixed(3)}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-
-    memoryCache = {
-      timestamp: now,
-      data: deduplicated,
-    };
-
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Cache-Control', 'public, max-age=300');
-    res.setHeader('X-FIRMS-Live', 'true');
-    res.status(200).json(deduplicated);
     return;
   }
 
-  // If live query yielded 0 (satellite orbit delay or API rate limits), serve fallback
-  if (memoryCache && memoryCache.data.length > 0) {
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('X-FIRMS-Live', 'true');
-    res.setHeader('X-FIRMS-Stale', 'true');
-    res.status(200).json(memoryCache.data);
-    return;
-  }
+  try {
+    const envKey = process.env.FIRMS_MAP_KEY?.trim();
+    const mapKey = (envKey && envKey !== 'MY_NASA_FIRMS_MAP_KEY')
+      ? envKey
+      : 'de8075a4eb10991384722aa38a5c06ec';
 
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('X-FIRMS-Live', 'false');
-  res.status(200).json(FALLBACK_DETECTIONS);
+    // Check cache first (only serve if cache has data)
+    const now = Date.now();
+    if (memoryCache && memoryCache.data.length > 0 && now - memoryCache.timestamp < CACHE_TTL_MS) {
+      safeSetHeader(res, 'Cache-Control', 'public, max-age=300');
+      safeSetHeader(res, 'X-FIRMS-Live', 'true');
+      safeSetHeader(res, 'X-FIRMS-Cached', 'true');
+      safeSendJson(res, 200, memoryCache.data);
+      return;
+    }
+
+    // Continental US Bounding Box: [West, South, East, North]
+    const areaCoords = '-125,24,-66,49';
+
+    // Try NOAA-20 first (primary active polar pass) with fast 4s timeout
+    let liveDetections = await fetchFirmsSource('VIIRS_NOAA20_NRT', mapKey, areaCoords);
+
+    // If NOAA-20 returned few detections, try SNPP as secondary pass
+    if (liveDetections.length < 10) {
+      const snpp = await fetchFirmsSource('VIIRS_SNPP_NRT', mapKey, areaCoords);
+      if (snpp.length > 0) {
+        liveDetections = [...liveDetections, ...snpp];
+      }
+    }
+
+    if (liveDetections.length > 0) {
+      // Deduplicate by close coordinates (within 0.005 deg)
+      const seen = new Set<string>();
+      const deduplicated = liveDetections.filter((d) => {
+        const key = `${d.latitude.toFixed(3)},${d.longitude.toFixed(3)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      memoryCache = {
+        timestamp: now,
+        data: deduplicated,
+      };
+
+      safeSetHeader(res, 'Cache-Control', 'public, max-age=300');
+      safeSetHeader(res, 'X-FIRMS-Live', 'true');
+      safeSendJson(res, 200, deduplicated);
+      return;
+    }
+
+    // If live query yielded 0 (satellite orbit delay or API rate limits), serve fallback
+    if (memoryCache && memoryCache.data.length > 0) {
+      safeSetHeader(res, 'X-FIRMS-Live', 'true');
+      safeSetHeader(res, 'X-FIRMS-Stale', 'true');
+      safeSendJson(res, 200, memoryCache.data);
+      return;
+    }
+
+    safeSetHeader(res, 'X-FIRMS-Live', 'false');
+    safeSendJson(res, 200, FALLBACK_DETECTIONS);
+  } catch (err: any) {
+    console.warn('NASA FIRMS handler caught error:', err?.message || err);
+    safeSetHeader(res, 'X-FIRMS-Live', 'false');
+    safeSetHeader(res, 'X-FIRMS-Error', 'Live satellite telemetry unavailable — displaying continental fallback');
+    safeSendJson(res, 200, FALLBACK_DETECTIONS);
+  }
 }

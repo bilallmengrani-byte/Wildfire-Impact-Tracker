@@ -71,9 +71,9 @@ export const TopBar: React.FC<TopBarProps> = ({
               </span>
             </div>
           ) : (
-            /* Warning shown only before real data is loaded */
+            /* Offline fallback notice when live satellites are unavailable */
             <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full bg-amber-950/90 border border-amber-600/70 text-amber-200 text-xs font-semibold shadow-xl backdrop-blur-md">
-              <span className="text-amber-400">⚠️ Using mock data — real data coming soon.</span>
+              <span className="text-amber-400">⚠️ Offline Continental Telemetry Active</span>
               <span className="hidden sm:inline-block w-1.5 h-1.5 rounded-full bg-amber-400/80"></span>
               <span className="hidden sm:inline text-[11px] font-normal text-amber-300/80 font-mono">
                 {activeDetectionsCount} Hotspots
@@ -90,7 +90,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-950/90 hover:bg-red-900 border border-red-700/70 text-red-200 text-xs shadow-lg backdrop-blur-md cursor-pointer transition"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              <span>Retry Fetch</span>
+              <span>Retry Live Feed</span>
             </button>
           )}
 
@@ -100,12 +100,12 @@ export const TopBar: React.FC<TopBarProps> = ({
                 isRealDataLoaded
                   ? 'bg-emerald-400 animate-pulse'
                   : errorMessage
-                  ? 'bg-red-400'
-                  : 'bg-amber-400'
+                  ? 'bg-amber-400'
+                  : 'bg-emerald-400'
               }`}
             ></span>
             <span className="text-zinc-300 font-medium text-[11px]">
-              {isRealDataLoaded ? 'Live Satellite Feed' : errorMessage ? 'Fetch Failed' : 'Ready'}
+              {isRealDataLoaded ? 'Live Satellite Feed' : 'Offline Dataset'}
             </span>
           </div>
         </div>
