@@ -23,6 +23,7 @@ import {
   savePlaceToStorage,
   removeSavedPlaceFromStorage,
 } from './lib/storage';
+import { MOCK_FIRE_DETECTIONS } from './lib/mockData';
 
 export default function App() {
   const [rawDetections, setRawDetections] = useState<FireDetection[]>([]);
@@ -69,14 +70,24 @@ export default function App() {
       const response = await fetch('/api/fires');
 
       if (!response.ok) {
-        let errDetails = `Server error ${response.status}`;
-        try {
-          const errJson = await response.json();
-          errDetails = errJson.message || errJson.error || errDetails;
-        } catch {
-          // ignore
+        let errDetails = `Server Error (${response.status})`;
+        if (response.status === 404) {
+          errDetails = `HTTP 404: /api/fires endpoint was not found on this deployment. Displaying offline continental fire data.`;
+        } else if (response.status === 500) {
+          errDetails = `HTTP 500: Server encountered an error fetching fire telemetry. Displaying offline continental fire data.`;
+        } else if (response.status === 502 || response.status === 504) {
+          errDetails = `HTTP ${response.status}: NASA satellite service timed out. Displaying offline continental fire data.`;
+        } else {
+          try {
+            const errJson = await response.json();
+            errDetails = errJson.message || errJson.error || errDetails;
+          } catch {
+            // ignore
+          }
         }
         setErrorMessage(errDetails);
+        setRawDetections(MOCK_FIRE_DETECTIONS);
+        setIsRealDataLoaded(false);
         return;
       }
 
@@ -120,10 +131,15 @@ export default function App() {
           setErrorMessage(firmsError);
         }
       } else {
-        setErrorMessage('No active fire detections received from server.');
+        setErrorMessage('No active fire detections received from server. Displaying offline continental fire data.');
+        setRawDetections(MOCK_FIRE_DETECTIONS);
+        setIsRealDataLoaded(false);
       }
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Failed to fetch fire detections');
+      const msg = err?.message || 'Failed to connect to /api/fires';
+      setErrorMessage(`Network Error: ${msg}. Displaying offline continental fire data.`);
+      setRawDetections(MOCK_FIRE_DETECTIONS);
+      setIsRealDataLoaded(false);
     } finally {
       setIsLoading(false);
     }

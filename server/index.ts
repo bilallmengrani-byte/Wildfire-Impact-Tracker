@@ -9,19 +9,19 @@ const router = express.Router();
 router.use(express.json());
 
 // NASA FIRMS Live Fire Detection Route
-router.get('/api/fires', getFiresHandler);
+router.get(['/api/fires', '/fires'], getFiresHandler);
 
 // OpenStreetMap Nominatim Geocoding Route
-router.get('/api/geocode', geocodeHandler);
+router.get(['/api/geocode', '/geocode'], geocodeHandler);
 
 // National Weather Service Wind & Weather Route
-router.get('/api/weather', getWeatherHandler);
+router.get(['/api/weather', '/weather'], getWeatherHandler);
 
 // EPA AirNow Air Quality Route
-router.get('/api/airquality', getAirQualityHandler);
+router.get(['/api/airquality', '/airquality'], getAirQualityHandler);
 
 // Health & Status Route
-router.get('/api/health', (_req: Request, res: Response) => {
+router.get(['/api/health', '/health'], (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
     service: 'Wildfire Impact Tracker API',

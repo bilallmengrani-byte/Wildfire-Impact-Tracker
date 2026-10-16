@@ -95,6 +95,23 @@ npm start
 
 ---
 
+## ⚡ Deploying to Vercel
+
+The application is pre-configured for instant zero-config deployment on Vercel:
+
+1. **Static Frontend + Serverless API**:
+   - `vercel.json` configures Vite production output (`dist/`) and routes SPA subpaths without 404 errors.
+   - Serverless functions in the `api/` directory (`api/fires.ts`, `api/weather.ts`, `api/airquality.ts`, `api/geocode.ts`, `api/health.ts`) handle all backend endpoints serverlessly.
+2. **Environment Variables on Vercel**:
+   - In your Vercel Project Dashboard (`Settings` -> `Environment Variables`), configure:
+     - `FIRMS_MAP_KEY`: Your NASA FIRMS map key.
+     - `AIRNOW_API_KEY`: Your EPA AirNow API key.
+3. **Automatic Fallback Protection**:
+   - If serverless functions or external APIs are unreachable, the client automatically falls back to curated continental US fire data so the map and analytics never break or show raw 404 pages.
+
+
+---
+
 ## 📡 Data Sources & Attributions
 
 - **NASA FIRMS (Fire Information for Resource Management System)**:
