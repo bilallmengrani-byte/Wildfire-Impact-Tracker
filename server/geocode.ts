@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { safeSendJson, safeSetHeader } from './response';
 
 interface NominatimResult {
   place_id: number;
@@ -68,14 +69,10 @@ export async function geocodeHandler(req: Request, res: Response): Promise<void>
       })
       .filter((r) => !isNaN(r.lat) && !isNaN(r.lng) && isFinite(r.lat) && isFinite(r.lng));
 
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Cache-Control', 'public, max-age=1800'); // Cache for 30 minutes
-    res.status(200).json(results);
+    safeSetHeader(res, 'Cache-Control', 'public, max-age=1800'); // Cache for 30 minutes
+    safeSendJson(res, 200, results);
   } catch (err: any) {
     console.warn('Geocoding fetch error:', err.message);
-    res.status(502).json({
-      error: 'Failed to geocode location',
-      message: err.message,
-    });
+    safeSendJson(res, 200, []);
   }
 }

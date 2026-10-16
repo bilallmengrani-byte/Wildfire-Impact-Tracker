@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { safeSendJson, safeSetHeader } from './response';
 
 const NWS_USER_AGENT = 'WildfireImpactTracker/1.0 (student project, bilalmengrani6@gmail.com)';
 
@@ -44,7 +45,7 @@ export async function getWeatherHandler(req: Request, res: Response): Promise<vo
   const lng = parseFloat(lngStr);
 
   if (isNaN(lat) || isNaN(lng)) {
-    res.status(400).json({
+    safeSendJson(res, 400, {
       available: false,
       message: 'Valid latitude and longitude are required.',
     });
@@ -59,9 +60,8 @@ export async function getWeatherHandler(req: Request, res: Response): Promise<vo
   // Check cache
   const cached = weatherCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Cache-Control', 'public, max-age=300');
-    res.status(200).json(cached.data);
+    safeSetHeader(res, 'Cache-Control', 'public, max-age=300');
+    safeSendJson(res, 200, cached.data);
     return;
   }
 
@@ -85,7 +85,7 @@ export async function getWeatherHandler(req: Request, res: Response): Promise<vo
         available: false,
         message: 'Weather data not available for this location',
       };
-      res.status(200).json(notCoveredResponse);
+      safeSendJson(res, 200, notCoveredResponse);
       return;
     }
 
@@ -94,7 +94,7 @@ export async function getWeatherHandler(req: Request, res: Response): Promise<vo
 
     if (!stationsUrl) {
       clearTimeout(timeout);
-      res.status(200).json({
+      safeSendJson(res, 200, {
         available: false,
         message: 'Weather data not available for this location',
       });
@@ -112,7 +112,7 @@ export async function getWeatherHandler(req: Request, res: Response): Promise<vo
 
     if (!stationsRes.ok) {
       clearTimeout(timeout);
-      res.status(200).json({
+      safeSendJson(res, 200, {
         available: false,
         message: 'Weather data not available for this location',
       });
@@ -124,7 +124,7 @@ export async function getWeatherHandler(req: Request, res: Response): Promise<vo
 
     if (!Array.isArray(stations) || stations.length === 0) {
       clearTimeout(timeout);
-      res.status(200).json({
+      safeSendJson(res, 200, {
         available: false,
         message: 'Weather data not available for this location',
       });
@@ -168,7 +168,7 @@ export async function getWeatherHandler(req: Request, res: Response): Promise<vo
     clearTimeout(timeout);
 
     if (!latestObservation) {
-      res.status(200).json({
+      safeSendJson(res, 200, {
         available: false,
         message: 'Weather data not available for this location',
       });
@@ -228,12 +228,11 @@ export async function getWeatherHandler(req: Request, res: Response): Promise<vo
       data: weatherResult,
     });
 
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Cache-Control', 'public, max-age=300');
-    res.status(200).json(weatherResult);
+    safeSetHeader(res, 'Cache-Control', 'public, max-age=300');
+    safeSendJson(res, 200, weatherResult);
   } catch (err: any) {
     console.warn('NWS API error:', err.message);
-    res.status(200).json({
+    safeSendJson(res, 200, {
       available: false,
       message: 'Weather data not available for this location',
     });

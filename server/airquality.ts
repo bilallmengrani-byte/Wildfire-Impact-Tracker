@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { safeSendJson, safeSetHeader } from './response';
 
 interface AirNowObservation {
   DateObserved: string;
@@ -54,7 +55,7 @@ export async function getAirQualityHandler(req: Request, res: Response): Promise
   const lng = parseFloat(lngStr);
 
   if (isNaN(lat) || isNaN(lng)) {
-    res.status(400).json({
+    safeSendJson(res, 400, {
       available: false,
       message: 'Valid latitude and longitude are required.',
     });
@@ -64,9 +65,8 @@ export async function getAirQualityHandler(req: Request, res: Response): Promise
   const cacheKey = `${lat.toFixed(3)},${lng.toFixed(3)}`;
   const cached = aqiCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Cache-Control', 'public, max-age=600');
-    res.status(200).json(cached.data);
+    safeSetHeader(res, 'Cache-Control', 'public, max-age=600');
+    safeSendJson(res, 200, cached.data);
     return;
   }
 
@@ -78,7 +78,7 @@ export async function getAirQualityHandler(req: Request, res: Response): Promise
       available: false,
       message: 'No nearby air quality station — check AirNow.gov directly',
     };
-    res.status(200).json(unavailableResponse);
+    safeSendJson(res, 200, unavailableResponse);
     return;
   }
 
@@ -98,7 +98,7 @@ export async function getAirQualityHandler(req: Request, res: Response): Promise
     clearTimeout(timeout);
 
     if (!response.ok) {
-      res.status(200).json({
+      safeSendJson(res, 200, {
         available: false,
         message: 'No nearby air quality station — check AirNow.gov directly',
       });
@@ -108,7 +108,7 @@ export async function getAirQualityHandler(req: Request, res: Response): Promise
     const data = (await response.json()) as AirNowObservation[];
 
     if (!Array.isArray(data) || data.length === 0) {
-      res.status(200).json({
+      safeSendJson(res, 200, {
         available: false,
         message: 'No nearby air quality station — check AirNow.gov directly',
       });
@@ -123,7 +123,7 @@ export async function getAirQualityHandler(req: Request, res: Response): Promise
     });
 
     if (validObservations.length === 0) {
-      res.status(200).json({
+      safeSendJson(res, 200, {
         available: false,
         message: 'No nearby air quality station — check AirNow.gov directly',
       });
@@ -154,7 +154,7 @@ export async function getAirQualityHandler(req: Request, res: Response): Promise
     }
 
     if (isStale) {
-      res.status(200).json({
+      safeSendJson(res, 200, {
         available: false,
         message: 'No nearby air quality station — check AirNow.gov directly',
       });
@@ -189,12 +189,11 @@ export async function getAirQualityHandler(req: Request, res: Response): Promise
       data: result,
     });
 
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Cache-Control', 'public, max-age=600');
-    res.status(200).json(result);
+    safeSetHeader(res, 'Cache-Control', 'public, max-age=600');
+    safeSendJson(res, 200, result);
   } catch (err: any) {
     console.warn('AirNow fetch error:', err.message);
-    res.status(200).json({
+    safeSendJson(res, 200, {
       available: false,
       message: 'No nearby air quality station — check AirNow.gov directly',
     });
